@@ -1,6 +1,11 @@
+#pragma once
+
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <string>
+#include <unistd.h>
 
 std::string random_string(const size_t length)
 {
@@ -14,4 +19,18 @@ std::string random_string(const size_t length)
         return charset[rand() % max_index];
     });
     return str;
+}
+
+inline void wait_for_times()
+{
+    while (true)
+    {
+        if (std::ifstream("/start").get() == '1')
+        {
+            std::cout << "Received start signal! Starting..." << '\n';
+            break;
+        }
+
+        usleep(100000);
+    }
 }

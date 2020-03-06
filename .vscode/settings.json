@@ -2,6 +2,7 @@
     "files.associations": {
         ".clang-format": "yaml",
         "*.ksy": "yaml",
+        "*.prisma": "prisma",
         "core": "cpp",
         "chrono": "cpp",
         "array": "cpp",
@@ -50,6 +51,16 @@
         "utility": "cpp",
         "string_view": "cpp",
         "iomanip": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "atomic": "cpp",
+        "bit": "cpp",
+        "iterator": "cpp",
+        "memory_resource": "cpp",
+        "optional": "cpp",
+        "random": "cpp",
+        "string": "cpp",
+        "forward_list": "cpp",
+        "map": "cpp",
+        "valarray": "cpp"
     }
 }

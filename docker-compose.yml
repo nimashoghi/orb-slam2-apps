@@ -1,16 +1,17 @@
 version: "3.1"
 services:
-    slam_live:
-        image: nimashoghi/ubuntu-xenial-orb-slam2-app:latest
-        command: "slam_app_live /root/ORBvoc.txt live http://192.168.0.114:8080/settings-live-stereo.yml http://192.168.0.116:8080/?action=stream&param=.mjpg http://192.168.0.116:8081/?action=stream&param=.mjpg"
-        # privileged: true
-        environment:
-            DISPLAY: 192.168.0.114:0.0
-        volumes:
-            - "./output/:/output/"
-    # slam:
-    #     image: nimashoghi/arm32v7-ubuntu-xenial-orb-slam2-app:latest
-    #     command: "slam_app /root/ORBvoc.txt  MH01 mono http://192.168.0.113:8080/euroc_mono.yaml http://192.168.0.113:8080/euroc_stereo.yaml http://192.168.0.113:8080/euroc_MH01/cam0/data http://192.168.0.113:8080/euroc_MH01/cam1/data http://192.168.0.113:8080/euroc_MH01/timestamps.txt"
-    #     privileged: true
+    # slam_live:
+    #     image: nimashoghi/ubuntu-xenial-orb-slam2-app:latest
+    #     command: "slam_app_live /root/ORBvoc.txt live http://192.168.0.114:8080/settings-live-stereo.yml http://192.168.0.116:8080/?action=stream&param=.mjpg http://192.168.0.116:8081/?action=stream&param=.mjpg"
+    #     # privileged: true
+    #     environment:
+    #         DISPLAY: 192.168.0.114:0.0
     #     volumes:
     #         - "./output/:/output/"
+    slam:
+        image: nimashoghi/ubuntu-xenial-orb-slam2-apps:2-13-20
+        network_mode: host
+        command: "slam_app /root/ORBvoc.txt MH01 mono http://localhost:8080/euroc_mono.yaml http://localhost:8080/euroc_stereo.yaml http://localhost:8080/mav0/cam0/data http://localhost:8080/mav0/cam1/data http://localhost:8080/timestamps.txt"
+        privileged: true
+        volumes:
+            - "./output/:/output/"

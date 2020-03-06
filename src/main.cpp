@@ -4,15 +4,42 @@
 #include <fstream>
 #include <iostream>
 #include <sys/stat.h>
+#include <ctime>
 
 #include <opencv2/core/core.hpp>
 #include <fmt/core.h>
 
 #include <orb_slam2/System.h>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#include "./json.hpp"
+
 #include "./util.hpp"
 
 using namespace std;
+
+auto ipc_connect(std::string path)
+{
+    const auto fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd == -1) { throw std::runtime_error{"Invalid fd"}; }
+    std::cout << "Connected to fd " << fd << '\n';
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) { throw std::runtime_error{"Could not connect"}; }
+
+    return [fd] (std::string data) {
+        auto buffer = data + ";;;;";
+        std::cout << "Sent the following packet: " << buffer << '\n';
+
+        const auto length = buffer.length();
+        if (write(fd, buffer.data(), length) != length) { throw std::runtime_error{"Invalid write size"}; }
+    };
+}
 
 auto now()
 {
@@ -45,6 +72,8 @@ auto load_images(const string &left_path, const string &right_path, const string
     images.reserve(5000);
 
     ifstream times_file{times_path.c_str()};
+
+    auto begin_time = 0.0;
     while (!times_file.eof())
     {
         string time;
@@ -53,11 +82,16 @@ auto load_images(const string &left_path, const string &right_path, const string
         {
             continue;
         }
+        auto time_double = stod(time) / 1e9;
+        if (begin_time == 0.0)
+        {
+            begin_time = time_double;
+        }
 
         images.emplace_back(
             fmt::format("{}/{}.png", left_path, time),
             fmt::format("{}/{}.png", right_path, time),
-            stod(time) / 1e9);
+            time_double - begin_time);
     }
 
     return images;
@@ -68,12 +102,45 @@ auto run_mono(const string &name, const vector<image_info> &images, ORB_SLAM2::O
     // Create system system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System system{vocabulary, settings_file, ORB_SLAM2::System::MONOCULAR, false};
 
+    wait_for_times();
+
     // Vector for tracking time statistics
     map<double, double> times;
 
-    // for (int ni = 0; ni < image_count; ni++)
+    const auto send_packet = ipc_connect("/var/resource-allocator-ipc.sock");
+
+    // how many skipped frames?
+    auto skipped = 0;
+
+    auto prev_algorithm_time = now();
+    auto prev_timestamp = 0.0;
     for (const auto &image : images)
     {
+        const auto time_since_prev = std::chrono::duration_cast<std::chrono::duration<double>>(now() - prev_algorithm_time).count();
+        const auto expected_time = image.timestamp - prev_timestamp;
+
+        fmt::print("time_since_prev: {}\nexpected_time: {}\ntime_since_prev - expected_time: {}\n", time_since_prev, expected_time, time_since_prev - expected_time);
+
+        if (time_since_prev > expected_time * 0.005)
+        {
+            const auto time_diff = (image.timestamp - prev_timestamp) - std::chrono::duration_cast<std::chrono::duration<double>>(now() - prev_algorithm_time).count();
+            if (time_diff > 0)
+            {
+                usleep(1000000 * time_diff);
+            }
+
+            nlohmann::json j;
+            j["source"] = std::string{"visual_slam"};
+            j["timestamp"] = image.timestamp;
+            send_packet(j.dump());
+
+            prev_algorithm_time = now();
+            prev_timestamp = image.timestamp;
+            fmt::print("Skipped frame {}", image.timestamp);
+            ++skipped;
+            continue;
+        }
+
         cv::Mat left_image;
 
         if (is_http)
@@ -95,12 +162,23 @@ auto run_mono(const string &name, const vector<image_info> &images, ORB_SLAM2::O
         const auto end = now();
 
         times[image.timestamp] = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+
+        const auto time_diff = (image.timestamp - prev_timestamp) - std::chrono::duration_cast<std::chrono::duration<double>>(now() - prev_algorithm_time).count();
+        if (time_diff > 0)
+        {
+            usleep(1000000 * time_diff);
+        }
+
+        prev_algorithm_time = now();
+        prev_timestamp = image.timestamp;
     }
 
     system.SaveKeyFrameTrajectoryTUM(fmt::format("/output/{}_keyframe_mono.csv", name));
 
     // Stop all threads
     system.Shutdown();
+
+    fmt::print("Total number of skipped frames: {}", skipped);
 
     return times;
 }
@@ -144,6 +222,8 @@ auto run_stereo(const string &name, const vector<image_info> &images, ORB_SLAM2:
 
     // Create system system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System system{vocabulary, settings_file, ORB_SLAM2::System::STEREO, false};
+
+    wait_for_times();
 
     // Vector for tracking time statistics
     map<double, double> times;

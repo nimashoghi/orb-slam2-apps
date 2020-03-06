@@ -1,9 +1,11 @@
 // See https://aka.ms/vscode-remote/devcontainer.json for format details.
 {
     "name": "C++",
-    "workspaceFolder": "/workspace",
-    "dockerComposeFile": "docker-compose.yml",
-    "service": "orb_slam2",
-    "shutdownAction": "stopCompose",
+    "dockerFile": "Dockerfile",
+    "runArgs": [
+        "--privileged",
+        "-v /var/run/docker.sock:/var/run/docker.sock",
+        "--network=host"
+    ],
     "extensions": ["ms-vscode.cpptools"]
 }
